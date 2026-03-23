@@ -148,7 +148,7 @@ def start():
         log("🔄 Trying to connect server...")
 
         ws = websocket.WebSocketApp(
-            "ws://localhost:5000",
+            "wss://keepmeactive.onrender.com",
             on_message=on_message,
             on_open=on_open,
             on_close=on_close,

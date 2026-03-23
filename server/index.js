@@ -1,14 +1,43 @@
+require("dotenv").config();
+
 const WebSocket = require("ws");
 const readline = require("readline");
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
-require("dotenv").config();
 
-const WS_PORT = process.env.WS_PORT || 5000;
-const HTTP_PORT = process.env.HTTP_PORT || 4000;
+const HTTP_PORT = process.env.PORT || 4000;
 
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+let agent = null;
+
+/* ---------- ROOT ROUTE ---------- */
+app.get("/", (req, res) => {
+res.send("Presence Keeper Server Running 🚀");
+});
+
+/* ---------- HTTP SERVER ---------- */
+const httpServer = http.createServer(app);
+
+/* ---------- SOCKET.IO ---------- */
+const io = new Server(httpServer, {
+cors: { origin: "*" }
+});
+
+io.on("connection", (socket) => {
+console.log("React UI connected");
+socket.emit("agent-status", !!agent);
+});
+
+function broadcastStatus() {
+io.emit("agent-status", !!agent);
+}
+
+/* ---------- AGENT WEBSOCKET ---------- */
 const wss = new WebSocket.Server({ server: httpServer });
 
 wss.on("connection", (ws) => {
@@ -42,75 +71,11 @@ ws.on("close", () => {
     broadcastStatus();
 });
 
-});
-
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-let agent = null;
-
-console.log("WS server started on", WS_PORT);
-
-/* ---------- SOCKET.IO HTTP SERVER ---------- */
-
-const httpServer = http.createServer(app);
-
-const io = new Server(httpServer, {
-cors: { origin: "*" }
-});
-
-io.on("connection", (socket) => {
-console.log("React UI connected");
-socket.emit("agent-status", !!agent);
-});
-
-function broadcastStatus() {
-io.emit("agent-status", !!agent);
-}
-
-/* ---------- AGENT WS CONNECTION ---------- */
-
-wss.on("connection", (ws) => {
-
-
-agent = ws;
-console.log("Agent connected");
-
-broadcastStatus();
-
-ws.on("message", (msg) => {
-
-    let text = msg.toString();
-
-    try {
-        let data = JSON.parse(text);
-
-        if (data.type === "heartbeat") {
-            console.log("Heartbeat", data.time);
-        } else {
-            console.log("Agent JSON", data);
-        }
-
-    } catch {
-        console.log("Raw", text);
-    }
-});
-
-ws.on("close", () => {
-    console.log("Agent disconnected");
-    agent = null;
-    broadcastStatus();
-});
-
 
 });
 
 /* ---------- COMMAND SENDER ---------- */
-
 function sendCommand(cmd) {
-
 
 if (!agent) {
     console.log("No agent");
@@ -125,7 +90,6 @@ return true;
 }
 
 /* ---------- CLI ---------- */
-
 const rl = readline.createInterface({
 input: process.stdin,
 output: process.stdout
@@ -156,7 +120,6 @@ else if (input.startsWith("interval")) {
 });
 
 /* ---------- REST API ---------- */
-
 app.post("/start", (req, res) => {
 res.json({ success: sendCommand({ action: "START" }) });
 });
@@ -187,8 +150,7 @@ app.get("/status", (req, res) => {
 res.json({ agentConnected: !!agent });
 });
 
-/* ---------- START ---------- */
-
+/* ---------- START SERVER ---------- */
 httpServer.listen(HTTP_PORT, () => {
-console.log("HTTP + Socket server running on", HTTP_PORT);
+console.log("HTTP + WS server running on", HTTP_PORT);
 });
