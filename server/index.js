@@ -7,6 +7,15 @@ const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
 
+/* ⭐ GLOBAL CRASH SHIELD (Production Must) */
+process.on("uncaughtException", (err) => {
+console.log("🔥 Uncaught Exception:", err.message);
+});
+
+process.on("unhandledRejection", (err) => {
+console.log("🔥 Unhandled Rejection:", err);
+});
+
 const HTTP_PORT = process.env.PORT || 4000;
 
 const app = express();
@@ -30,7 +39,15 @@ cors: { origin: "*" }
 
 io.on("connection", (socket) => {
 console.log("React UI connected");
+
+
+socket.on("error", (err) => {
+    console.log("⚠ Socket.io client error:", err.message);
+});
+
 socket.emit("agent-status", !!agent);
+
+
 });
 
 function broadcastStatus() {
@@ -40,29 +57,45 @@ io.emit("agent-status", !!agent);
 /* ---------- AGENT WEBSOCKET ---------- */
 const wss = new WebSocket.Server({ server: httpServer });
 
+/* ⭐ WS SERVER ERROR GUARD */
+wss.on("error", (err) => {
+console.log("⚠ WS Server error:", err.message);
+});
+
 wss.on("connection", (ws) => {
+
 
 agent = ws;
 console.log("Agent connected (cloud)");
-
 broadcastStatus();
+
+/* ⭐ Prevent crash on invalid frames */
+ws.on("error", (err) => {
+    console.log("⚠ Agent WS error:", err.message);
+});
 
 ws.on("message", (msg) => {
 
-    let text = msg.toString();
-
     try {
-        let data = JSON.parse(text);
+        const text = msg.toString();
 
-        if (data.type === "heartbeat") {
-            console.log("Heartbeat", data.time);
-        } else {
-            console.log("Agent JSON", data);
+        try {
+            const data = JSON.parse(text);
+
+            if (data.type === "heartbeat") {
+                console.log("Heartbeat", data.time);
+            } else {
+                console.log("Agent JSON", data);
+            }
+
+        } catch {
+            console.log("Raw", text);
         }
 
-    } catch {
-        console.log("Raw", text);
+    } catch (err) {
+        console.log("⚠ Message handling error:", err.message);
     }
+
 });
 
 ws.on("close", () => {
@@ -74,17 +107,25 @@ ws.on("close", () => {
 
 });
 
-/* ---------- COMMAND SENDER ---------- */
+/* ---------- SAFE COMMAND SENDER ---------- */
 function sendCommand(cmd) {
+
 
 if (!agent) {
     console.log("No agent");
     return false;
 }
 
-console.log("Sending", cmd);
-agent.send(JSON.stringify(cmd));
-return true;
+try {
+    console.log("Sending", cmd);
+    agent.send(JSON.stringify(cmd));
+    return true;
+} catch (err) {
+    console.log("⚠ Send failed:", err.message);
+    agent = null;
+    broadcastStatus();
+    return false;
+}
 
 
 }
