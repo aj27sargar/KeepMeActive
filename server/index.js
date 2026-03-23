@@ -1,13 +1,12 @@
 require("dotenv").config();
 
-const WebSocket = require("ws");
 const readline = require("readline");
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
 
-/* ⭐ GLOBAL CRASH SHIELD (Production Must) */
+/* ⭐ GLOBAL CRASH SHIELD */
 process.on("uncaughtException", (err) => {
 console.log("🔥 Uncaught Exception:", err.message);
 });
@@ -32,17 +31,43 @@ res.send("Presence Keeper Server Running 🚀");
 /* ---------- HTTP SERVER ---------- */
 const httpServer = http.createServer(app);
 
-/* ---------- SOCKET.IO ---------- */
+/* ---------- SOCKET.IO SERVER ---------- */
 const io = new Server(httpServer, {
 cors: { origin: "*" }
 });
 
+/* ⭐ CONNECTION HANDLER (UI + Agent both come here) */
 io.on("connection", (socket) => {
-console.log("React UI connected");
 
+
+console.log("Client connected:", socket.id);
 
 socket.on("error", (err) => {
-    console.log("⚠ Socket.io client error:", err.message);
+    console.log("⚠ Socket error:", err.message);
+});
+
+/* ⭐ Agent registration event */
+socket.on("agent-register", () => {
+    agent = socket;
+    console.log("✅ Agent registered via socket.io");
+    broadcastStatus();
+});
+
+/* ⭐ Heartbeat from agent */
+socket.on("heartbeat", (data) => {
+    console.log("Heartbeat", data.time);
+});
+
+socket.on("disconnect", () => {
+
+    if (agent && socket.id === agent.id) {
+        console.log("❌ Agent disconnected");
+        agent = null;
+        broadcastStatus();
+    } else {
+        console.log("UI disconnected:", socket.id);
+    }
+
 });
 
 socket.emit("agent-status", !!agent);
@@ -53,59 +78,6 @@ socket.emit("agent-status", !!agent);
 function broadcastStatus() {
 io.emit("agent-status", !!agent);
 }
-
-/* ---------- AGENT WEBSOCKET ---------- */
-const wss = new WebSocket.Server({ server: httpServer });
-
-/* ⭐ WS SERVER ERROR GUARD */
-wss.on("error", (err) => {
-console.log("⚠ WS Server error:", err.message);
-});
-
-wss.on("connection", (ws) => {
-
-
-agent = ws;
-console.log("Agent connected (cloud)");
-broadcastStatus();
-
-/* ⭐ Prevent crash on invalid frames */
-ws.on("error", (err) => {
-    console.log("⚠ Agent WS error:", err.message);
-});
-
-ws.on("message", (msg) => {
-
-    try {
-        const text = msg.toString();
-
-        try {
-            const data = JSON.parse(text);
-
-            if (data.type === "heartbeat") {
-                console.log("Heartbeat", data.time);
-            } else {
-                console.log("Agent JSON", data);
-            }
-
-        } catch {
-            console.log("Raw", text);
-        }
-
-    } catch (err) {
-        console.log("⚠ Message handling error:", err.message);
-    }
-
-});
-
-ws.on("close", () => {
-    console.log("Agent disconnected");
-    agent = null;
-    broadcastStatus();
-});
-
-
-});
 
 /* ---------- SAFE COMMAND SENDER ---------- */
 function sendCommand(cmd) {
@@ -118,7 +90,7 @@ if (!agent) {
 
 try {
     console.log("Sending", cmd);
-    agent.send(JSON.stringify(cmd));
+    agent.emit("command", cmd);
     return true;
 } catch (err) {
     console.log("⚠ Send failed:", err.message);
@@ -193,5 +165,5 @@ res.json({ agentConnected: !!agent });
 
 /* ---------- START SERVER ---------- */
 httpServer.listen(HTTP_PORT, () => {
-console.log("HTTP + WS server running on", HTTP_PORT);
+console.log("HTTP + Socket.IO server running on", HTTP_PORT);
 });
