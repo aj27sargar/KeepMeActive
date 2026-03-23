@@ -9,7 +9,41 @@ require("dotenv").config();
 const WS_PORT = process.env.WS_PORT || 5000;
 const HTTP_PORT = process.env.HTTP_PORT || 4000;
 
-const wss = new WebSocket.Server({ port: WS_PORT });
+const wss = new WebSocket.Server({ server: httpServer });
+
+wss.on("connection", (ws) => {
+
+agent = ws;
+console.log("Agent connected (cloud)");
+
+broadcastStatus();
+
+ws.on("message", (msg) => {
+
+    let text = msg.toString();
+
+    try {
+        let data = JSON.parse(text);
+
+        if (data.type === "heartbeat") {
+            console.log("Heartbeat", data.time);
+        } else {
+            console.log("Agent JSON", data);
+        }
+
+    } catch {
+        console.log("Raw", text);
+    }
+});
+
+ws.on("close", () => {
+    console.log("Agent disconnected");
+    agent = null;
+    broadcastStatus();
+});
+
+});
+
 
 const app = express();
 app.use(cors());
