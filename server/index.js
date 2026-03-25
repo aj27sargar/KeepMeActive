@@ -4,6 +4,7 @@ const readline = require("readline");
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
+const path = require("path");
 const { Server } = require("socket.io");
 
 /* ⭐ GLOBAL CRASH SHIELD */
@@ -22,11 +23,23 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-let agent = null;
+/* ⭐ MULTI AGENT STORE */
+let agents = {};   // deviceId -> socket
 
 /* ---------- ROOT ROUTE ---------- */
 app.get("/", (req, res) => {
 res.send("Presence Keeper Server Running 🚀");
+});
+
+app.get("/download/agent", (req, res) => {
+const agentPath = path.join(__dirname, "public", "agent.exe");
+
+res.download(agentPath, "agent.exe", (err) => {
+    if (err && !res.headersSent) {
+        console.log("âš  Agent download failed:", err.message);
+        res.status(404).json({ error: "agent.exe not found" });
+    }
+});
 });
 
 /* ---------- HTTP SERVER ---------- */
@@ -37,7 +50,7 @@ const io = new Server(httpServer, {
 cors: { origin: "*" }
 });
 
-/* ⭐ CONNECTION HANDLER (UI + Agent both come here) */
+/* ⭐ CONNECTION HANDLER */
 io.on("connection", (socket) => {
 
 
@@ -47,23 +60,32 @@ socket.on("error", (err) => {
     console.log("⚠ Socket error:", err.message);
 });
 
-/* ⭐ Agent registration event */
-socket.on("agent-register", () => {
-    agent = socket;
-    console.log("✅ Agent registered via socket.io");
+/* ⭐ Agent registration with identity */
+socket.on("agent-register", (data) => {
+
+    const { deviceId, deviceName } = data || {};
+
+    if (!deviceId) return;
+
+    socket.deviceId = deviceId;
+    socket.deviceName = deviceName || "Unknown Device";
+
+    agents[deviceId] = socket;
+
+    console.log(`✅ Agent registered: ${socket.deviceName} (${deviceId})`);
+
     broadcastStatus();
 });
 
-/* ⭐ Heartbeat from agent */
 socket.on("heartbeat", (data) => {
-    console.log("Heartbeat", data.time);
+    console.log("Heartbeat", socket.deviceName, data?.time);
 });
 
 socket.on("disconnect", () => {
 
-    if (agent && socket.id === agent.id) {
-        console.log("❌ Agent disconnected");
-        agent = null;
+    if (socket.deviceId && agents[socket.deviceId]) {
+        console.log(`❌ Agent disconnected: ${socket.deviceName}`);
+        delete agents[socket.deviceId];
         broadcastStatus();
     } else {
         console.log("UI disconnected:", socket.id);
@@ -71,31 +93,40 @@ socket.on("disconnect", () => {
 
 });
 
-socket.emit("agent-status", !!agent);
-
 
 });
 
+/* ---------- BROADCAST STATUS ---------- */
 function broadcastStatus() {
-io.emit("agent-status", !!agent);
+
+
+const deviceList = Object.values(agents).map(s => ({
+    deviceId: s.deviceId,
+    deviceName: s.deviceName
+}));
+
+io.emit("device-list", deviceList);
+
+
 }
 
 /* ---------- SAFE COMMAND SENDER ---------- */
-function sendCommand(cmd) {
+function sendCommand(deviceId, cmd) {
 
+const agent = agents[deviceId];
 
 if (!agent) {
-    console.log("No agent");
+    console.log("Agent not found:", deviceId);
     return false;
 }
 
 try {
-    console.log("Sending", cmd);
+    console.log("Sending", cmd, "→", agent.deviceName);
     agent.emit("command", cmd);
     return true;
 } catch (err) {
     console.log("⚠ Send failed:", err.message);
-    agent = null;
+    delete agents[deviceId];
     broadcastStatus();
     return false;
 }
@@ -109,42 +140,59 @@ input: process.stdin,
 output: process.stdout
 });
 
-console.log("Commands: start stop mouse keyboard interval 5");
+console.log("Commands: start <deviceId>");
 
 rl.on("line", (input) => {
 
 
-input = input.trim();
+const parts = input.trim().split(" ");
+const cmd = parts[0];
+const deviceId = parts[1];
 
-if (input === "start") sendCommand({ action: "START" });
-else if (input === "stop") sendCommand({ action: "STOP" });
-else if (input === "mouse") sendCommand({ action: "MODE", mode: "mouse" });
-else if (input === "keyboard") sendCommand({ action: "MODE", mode: "keyboard" });
-else if (input.startsWith("interval")) {
-
-    let val = parseInt(input.split(" ")[1]);
-
-    if (!isNaN(val))
-        sendCommand({ action: "INTERVAL", interval: val });
-    else
-        console.log("Invalid interval");
+if (!deviceId) {
+    console.log("Provide deviceId");
+    return;
 }
+
+if (cmd === "start")
+    sendCommand(deviceId, { action: "START" });
+
+else if (cmd === "stop")
+    sendCommand(deviceId, { action: "STOP" });
 
 
 });
 
 /* ---------- REST API ---------- */
+
+app.get("/devices", (req, res) => {
+
+
+const list = Object.values(agents).map(s => ({
+    deviceId: s.deviceId,
+    deviceName: s.deviceName
+}));
+
+res.json(list);
+
+
+});
+
 app.post("/start", (req, res) => {
-res.json({ success: sendCommand({ action: "START" }) });
+res.json({
+success: sendCommand(req.body.deviceId, { action: "START" })
+});
 });
 
 app.post("/stop", (req, res) => {
-res.json({ success: sendCommand({ action: "STOP" }) });
+res.json({
+success: sendCommand(req.body.deviceId, { action: "STOP" })
+});
 });
 
 app.post("/mode", (req, res) => {
 res.json({
-success: sendCommand({
+success: sendCommand(req.body.deviceId, {
 action: "MODE",
 mode: req.body.mode
 })
@@ -153,18 +201,14 @@ mode: req.body.mode
 
 app.post("/interval", (req, res) => {
 res.json({
-success: sendCommand({
+success: sendCommand(req.body.deviceId, {
 action: "INTERVAL",
-interval: req.body.interval
+interval: Number(req.body.interval)
 })
 });
 });
 
-app.get("/status", (req, res) => {
-res.json({ agentConnected: !!agent });
-});
-
 /* ---------- START SERVER ---------- */
 httpServer.listen(HTTP_PORT, () => {
-console.log("HTTP + Socket.IO server running on", HTTP_PORT);
+console.log("HTTP + Multi-Agent Socket.IO server running on", HTTP_PORT);
 });

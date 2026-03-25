@@ -213,6 +213,46 @@ body {
 /* ── Preview Box ────────────────────────────────────────── */
 .agent-preview-card { display: flex; flex-direction: column; }
 
+.agent-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.agent-chip {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.agent-chip.connected {
+  color: #0f766e;
+  background: rgba(20, 184, 166, 0.12);
+  border: 1px solid rgba(20, 184, 166, 0.2);
+}
+
+.dark .agent-chip.connected {
+  color: #5eead4;
+}
+
+.agent-chip.empty {
+  color: var(--text-muted);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+}
+
+.agent-id {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
 .preview-box {
   position: relative;
   width: 100%;
@@ -293,6 +333,54 @@ body {
   color: var(--text-muted);
 }
 .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.download-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(135deg, rgba(91,110,245,0.12), rgba(139,92,246,0.06)),
+    var(--surface2);
+}
+
+.download-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.download-text {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.download-btn {
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.device-select {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 0.88rem;
+  font-family: var(--mono);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.35s;
+}
+
+.device-select:focus {
+  border-color: var(--accent1);
+  box-shadow: 0 0 0 3px rgba(91,110,245,0.12);
+}
 
 /* Buttons */
 .btn {
@@ -418,3 +506,15 @@ body {
   gap: 8px;
 }
 .footer-sep { opacity: 0.4; }
+
+@media (max-width: 640px) {
+  .download-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .download-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

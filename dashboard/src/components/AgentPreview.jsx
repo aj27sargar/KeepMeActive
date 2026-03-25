@@ -1,9 +1,10 @@
 import React, { useEffect, useRef } from "react";
 
-export default function AgentPreview() {
+export default function AgentPreview({ devices = [] }) {
   const dotRef = useRef(null);
   const frameRef = useRef(null);
   const angleRef = useRef(0);
+  const primaryDevice = devices[0];
 
   useEffect(() => {
     const animate = () => {
@@ -25,6 +26,12 @@ export default function AgentPreview() {
       <div className="card-header">
         <h2 className="card-title">Agent Activity Preview</h2>
         <p className="card-subtitle">Real-time automation visualization</p>
+      </div>
+      <div className="agent-meta">
+        <span className={`agent-chip ${primaryDevice ? "connected" : "empty"}`}>
+          {primaryDevice ? primaryDevice.deviceName : "No active agent"}
+        </span>
+        {primaryDevice && <code className="agent-id">{primaryDevice.deviceId}</code>}
       </div>
       <div className="preview-box">
         <div className="preview-hint">

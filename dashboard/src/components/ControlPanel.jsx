@@ -1,22 +1,33 @@
 import React, { useState } from "react";
 import * as api from "../api/agentApi";
 
-export default function ControlPanel({ onToast }) {
+export default function ControlPanel({ devices = [], onToast }) {
   const [loading, setLoading] = useState(null);
   const [activeMode, setActiveMode] = useState("mouse");
   const [intervalVal, setIntervalVal] = useState(10);
+  const [selectedDeviceId, setSelectedDeviceId] = useState("");
+
+  const resolvedDeviceId =
+    selectedDeviceId || (devices.length > 0 ? devices[0].deviceId : "");
 
   const handle = async (label, fn) => {
+    if (!resolvedDeviceId) {
+      onToast("No connected agent found", "error");
+      return;
+    }
+
     setLoading(label);
     try {
       await fn();
-      onToast("Command Sent");
+      onToast("Command sent");
     } catch {
-      onToast("Command Failed", "error");
+      onToast("Command failed", "error");
     } finally {
       setTimeout(() => setLoading(null), 600);
     }
   };
+
+  const downloadUrl = api.getAgentDownloadUrl();
 
   return (
     <div className="control-panel card">
@@ -26,14 +37,60 @@ export default function ControlPanel({ onToast }) {
       </div>
 
       <div className="controls-grid">
+        <div className="control-group">
+          <label className="group-label">Target Agent</label>
+          <select
+            className="device-select"
+            value={resolvedDeviceId}
+            onChange={(e) => setSelectedDeviceId(e.target.value)}
+            disabled={devices.length === 0}
+          >
+            {devices.length === 0 ? (
+              <option value="">No agents connected</option>
+            ) : (
+              devices.map((device) => (
+                <option key={device.deviceId} value={device.deviceId}>
+                  {device.deviceName} ({device.deviceId})
+                </option>
+              ))
+            )}
+          </select>
+        </div>
+
+        <div className="control-group">
+          <label className="group-label">Agent Download</label>
+          <div className="download-card">
+            <div>
+              <p className="download-title">Download Windows Agent</p>
+              <p className="download-text">
+                Install the desktop agent to connect this device to the dashboard.
+              </p>
+            </div>
+            <a
+              className="btn btn-primary download-btn"
+              href={downloadUrl}
+              download="agent.exe"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 3v12" />
+                <path d="M7 10l5 5 5-5" />
+                <path d="M5 21h14" />
+              </svg>
+              Download agent.exe
+            </a>
+          </div>
+        </div>
+
         {/* Primary actions */}
         <div className="control-group">
           <label className="group-label">Automation</label>
           <div className="btn-row">
             <button
               className="btn btn-primary"
-              onClick={() => handle("start", api.startAutomation)}
-              disabled={loading === "start"}
+              onClick={() => handle("start", () => api.startAutomation(resolvedDeviceId))}
+              disabled={loading === "start" || !resolvedDeviceId}
             >
               {loading === "start" ? <Spinner /> : (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -44,8 +101,8 @@ export default function ControlPanel({ onToast }) {
             </button>
             <button
               className="btn btn-danger"
-              onClick={() => handle("stop", api.stopAutomation)}
-              disabled={loading === "stop"}
+              onClick={() => handle("stop", () => api.stopAutomation(resolvedDeviceId))}
+              disabled={loading === "stop" || !resolvedDeviceId}
             >
               {loading === "stop" ? <Spinner /> : (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -63,7 +120,11 @@ export default function ControlPanel({ onToast }) {
           <div className="btn-row">
             <button
               className={`btn btn-secondary ${activeMode === "mouse" ? "active" : ""}`}
-              onClick={() => { setActiveMode("mouse"); handle("mouse", () => api.setMode("mouse")); }}
+              onClick={() => {
+                setActiveMode("mouse");
+                handle("mouse", () => api.setMode(resolvedDeviceId, "mouse"));
+              }}
+              disabled={!resolvedDeviceId}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M5 3a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v8l3 3v3H4v-3l3-3V3z"/>
@@ -73,7 +134,11 @@ export default function ControlPanel({ onToast }) {
             </button>
             <button
               className={`btn btn-secondary ${activeMode === "keyboard" ? "active" : ""}`}
-              onClick={() => { setActiveMode("keyboard"); handle("keyboard", () => api.setMode("keyboard")); }}
+              onClick={() => {
+                setActiveMode("keyboard");
+                handle("keyboard", () => api.setMode(resolvedDeviceId, "keyboard"));
+              }}
+              disabled={!resolvedDeviceId}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6" y2="10"/>
@@ -99,8 +164,8 @@ export default function ControlPanel({ onToast }) {
             />
             <button
               className="btn btn-outline"
-              onClick={() => handle("interval", () => api.setInterval(intervalVal))}
-              disabled={loading === "interval"}
+              onClick={() => handle("interval", () => api.setInterval(resolvedDeviceId, Number(intervalVal)))}
+              disabled={loading === "interval" || !resolvedDeviceId}
             >
               {loading === "interval" ? <Spinner /> : "Set"}
             </button>

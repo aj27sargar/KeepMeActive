@@ -5,7 +5,7 @@ import StatusBadge from "../components/StatusBadge";
 import ControlPanel from "../components/ControlPanel";
 import Toast from "../components/Toast";
 
-export default function DashboardPage({ online, dark, onToggleDark }) {
+export default function DashboardPage({ online, devices, dark, onToggleDark }) {
   const [toast, setToast] = useState(null);
 
   const showToast = useCallback((message, type = "success") => {
@@ -23,13 +23,13 @@ export default function DashboardPage({ online, dark, onToggleDark }) {
             <h1 className="page-title">Dashboard</h1>
             <p className="page-sub">Monitor and control your automation agent</p>
           </div>
-          <StatusBadge online={online} />
+          <StatusBadge online={online} count={devices.length} />
         </div>
 
         {/* Main grid */}
         <div className="dashboard-grid">
-          <AgentPreview />
-          <ControlPanel onToast={showToast} />
+          <AgentPreview devices={devices} />
+          <ControlPanel devices={devices} onToast={showToast} />
         </div>
 
         {/* Footer */}

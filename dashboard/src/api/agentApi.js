@@ -1,8 +1,22 @@
 import axios from "axios";
 
-const BASE = "https://keepmeactive.onrender.com";
+export const SERVER_BASE = "https://keepmeactive.onrender.com";
 
-export const startAutomation = () => axios.post(`${BASE}/start`);
-export const stopAutomation = () => axios.post(`${BASE}/stop`);
-export const setMode = (mode) => axios.post(`${BASE}/mode`, { mode });
-export const setInterval = (interval) => axios.post(`${BASE}/interval`, { interval });
+export const fetchDevices = async () => {
+  const { data } = await axios.get(`${SERVER_BASE}/devices`);
+  return data;
+};
+
+export const startAutomation = (deviceId) =>
+  axios.post(`${SERVER_BASE}/start`, { deviceId });
+
+export const stopAutomation = (deviceId) =>
+  axios.post(`${SERVER_BASE}/stop`, { deviceId });
+
+export const setMode = (deviceId, mode) =>
+  axios.post(`${SERVER_BASE}/mode`, { deviceId, mode });
+
+export const setInterval = (deviceId, interval) =>
+  axios.post(`${SERVER_BASE}/interval`, { deviceId, interval });
+
+export const getAgentDownloadUrl = () => `${SERVER_BASE}/download/agent`;

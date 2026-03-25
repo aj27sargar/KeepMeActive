@@ -1,16 +1,22 @@
-import socketio
-import json
-import pyautogui
-import time
-import threading
-from datetime import datetime
 import ctypes
 import math
+import socket
+import threading
+import time
+import uuid
+from datetime import datetime
+
+import pyautogui
+import socketio
+
+
+DEVICE_ID = str(uuid.getnode())
+DEVICE_NAME = socket.gethostname()
 
 sio = socketio.Client(
     reconnection=True,
     reconnection_attempts=999999,
-    reconnection_delay=5
+    reconnection_delay=5,
 )
 
 ws_connected = False
@@ -26,10 +32,10 @@ def log(msg):
 
 def perform_activity():
     global mode
+
     try:
         if mode == "mouse":
             x, y = pyautogui.position()
-
             radius = 40
             steps = 20
             duration = 0.05
@@ -41,29 +47,27 @@ def perform_activity():
                 pyautogui.moveTo(new_x, new_y, duration=duration)
 
             pyautogui.moveTo(x, y, duration=0.1)
-            log("ðŸŒ€ Circular mouse jiggle")
-
+            log("Circular mouse jiggle")
         elif mode == "keyboard":
             pyautogui.press("shift")
-            log("âŒ¨ Keyboard shift")
-
+            log("Keyboard shift")
     except Exception as e:
-        log(f"ðŸ”¥ Activity error: {e}")
+        log(f"Activity error: {e}")
 
 
 def prevent_sleep(enable):
-    ES_CONTINUOUS = 0x80000000
-    ES_SYSTEM_REQUIRED = 0x00000001
-    ES_DISPLAY_REQUIRED = 0x00000002
+    es_continuous = 0x80000000
+    es_system_required = 0x00000001
+    es_display_required = 0x00000002
 
     if enable:
         ctypes.windll.kernel32.SetThreadExecutionState(
-            ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED
+            es_continuous | es_system_required | es_display_required
         )
-        log("ðŸ’¡ Sleep prevention ENABLED")
+        log("Sleep prevention ENABLED")
     else:
-        ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
-        log("ðŸ’¤ Sleep prevention DISABLED")
+        ctypes.windll.kernel32.SetThreadExecutionState(es_continuous)
+        log("Sleep prevention DISABLED")
 
 
 @sio.event
@@ -71,29 +75,36 @@ def connect():
     global ws_connected, activity_thread_started
 
     ws_connected = True
-    log("ðŸŒ Connected to server (socket.io)")
+    log(f"Connected -> {DEVICE_NAME}")
 
-    sio.emit("agent-register")
+    sio.emit(
+        "agent-register",
+        {
+            "deviceId": DEVICE_ID,
+            "deviceName": DEVICE_NAME,
+        },
+    )
 
     if not activity_thread_started:
         threading.Thread(target=activity_loop, daemon=True).start()
         threading.Thread(target=heartbeat_loop, daemon=True).start()
         activity_thread_started = True
-        log("âš™ Activity worker started")
+        log("Activity worker started")
 
 
 @sio.event
 def disconnect():
     global ws_connected
+
     ws_connected = False
-    log("âš  Server connection lost")
+    log("Server connection lost")
 
 
 @sio.on("command")
 def on_message(data):
     global keep_active, interval, mode
 
-    log(f"ðŸ“© Command: {data}")
+    log(f"Command: {data}")
 
     try:
         action = data.get("action")
@@ -101,23 +112,19 @@ def on_message(data):
         if action == "START":
             keep_active = True
             prevent_sleep(True)
-            log("ðŸŸ¢ Automation STARTED")
-
+            log("Automation STARTED")
         elif action == "STOP":
             keep_active = False
             prevent_sleep(False)
-            log("ðŸ›‘ Automation STOPPED")
-
+            log("Automation STOPPED")
         elif action == "MODE":
             mode = data.get("mode", "mouse")
-            log(f"âš™ Mode set â†’ {mode}")
-
+            log(f"Mode set -> {mode}")
         elif action == "INTERVAL":
-            interval = data.get("interval", 10)
-            log(f"â± Interval set â†’ {interval}s")
-
+            interval = int(data.get("interval", 10))
+            log(f"Interval set -> {interval}s")
     except Exception as e:
-        log(f"ðŸ”¥ Command error: {e}")
+        log(f"Command error: {e}")
 
 
 def activity_loop():
@@ -126,7 +133,7 @@ def activity_loop():
     while True:
         if keep_active and ws_connected:
             perform_activity()
-            log("âœ… Activity tick")
+            log("Activity tick")
             time.sleep(interval)
         else:
             time.sleep(1)
@@ -136,10 +143,13 @@ def heartbeat_loop():
     while True:
         if ws_connected:
             try:
-                sio.emit("heartbeat", {
-                    "time": datetime.now().strftime("%H:%M:%S")
-                })
-            except:
+                sio.emit(
+                    "heartbeat",
+                    {
+                        "time": datetime.now().strftime("%H:%M:%S"),
+                    },
+                )
+            except Exception:
                 pass
         time.sleep(20)
 
@@ -147,17 +157,17 @@ def heartbeat_loop():
 def start():
     while True:
         try:
-            log("ðŸ”„ Trying to connect server...")
+            log("Trying to connect server...")
             sio.connect(
                 "https://keepmeactive.onrender.com",
-                transports=["websocket"]
+                transports=["websocket"],
             )
             sio.wait()
         except Exception as e:
-            log(f"ðŸ”¥ Connection error: {e}")
+            log(f"Connection error: {e}")
             time.sleep(5)
 
 
 if __name__ == "__main__":
-    log("ðŸš€ Agent starting...")
+    log("Agent starting...")
     start()
